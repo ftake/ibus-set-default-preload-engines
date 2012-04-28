@@ -1,0 +1,70 @@
+#!/usr/bin/python
+
+import gconf, os, sys
+
+key_preload_engines = "/desktop/ibus/general/preload_engines"
+config_dir = "/usr/share/ibus/set-default-preload-engines/engine-precedence"
+available_options = [sys.argv[0], "--reset", "--help"]
+
+def string_value(str):
+    result = gconf.Value(gconf.VALUE_STRING)
+    result.set_string(str)
+    return result
+
+def is_preload_engines_empty(client):
+    preload_engines = client.get(key_preload_engines)
+    return preload_engines == None or len(preload_engines.get_list()) == 0
+
+def print_usage():
+    print "Usage:"
+    print "  --help    print this message"
+    print "  --reset   reset preload engines to default ones"
+
+def get_lang():
+    if "LC_ALL" in os.environ:
+        return os.environ['LC_ALL']
+    elif "LC_CTYPE" in os.environ:
+        return os.environ['LC_CTYPE']
+    elif "LANG" in os.environ:
+        return os.environ['LANG']
+    else:
+        return "en_US"
+
+def default_engines(lang):
+    subdirs = [lang]
+    for i in range(len(lang) - 1, -1, -1):
+        c = lang[i]
+        if c == "@" or c == "." or c == "_":
+            subdirs.append(lang[:i])
+
+    for subdir in subdirs:
+        subdir_path = os.path.join(config_dir, subdir)
+        if os.path.isdir(subdir_path):
+            engine_files = os.listdir(subdir_path)
+            engine_files.sort()
+            return [s.split('-', 1)[1] for s in engine_files]
+    return []
+
+#
+#  main
+#
+for arg in sys.argv:
+    if arg not in available_options:
+        print "unrecognized option `", arg, "'"
+        print_usage()
+        exit(1)
+
+if "--help" in sys.argv:
+    print_usage()
+    exit(0)
+
+client = gconf.client_get_default()
+
+if "--reset" in sys.argv or is_preload_engines_empty(client):
+    engines = default_engines(get_lang())
+    print "set preload_engines: ", engines
+    value = gconf.Value(gconf.VALUE_LIST)
+    value.set_list_type(gconf.VALUE_STRING)
+    value.set_list([string_value(v) for v in engines])
+    client.set(key_preload_engines, value)
+
